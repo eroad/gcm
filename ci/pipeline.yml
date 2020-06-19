@@ -126,7 +126,8 @@ jobs:
       NEXUS_USER: {{nexus-user}}
       NEXUS_PASSWORD: {{nexus-password}}
       MAVEN_PHASES: verify
-      MAVEN_USE_VERSIONS_PLUGIN: false
+      MAVEN_OPTIONS: -DgroupId='com.google.android.gcm.server'
+      MAVEN_USE_VERSIONS_PLUGIN: true
     on_failure:
       put: google-gcm-rest-client-pullrequest
       params:
@@ -158,7 +159,8 @@ jobs:
       NEXUS_USER: {{nexus-user}}
       NEXUS_PASSWORD: {{nexus-password}}
       MAVEN_GOALS: deploy
-      MAVEN_USE_VERSIONS_PLUGIN: false
+      MAVEN_OPTIONS: -DgroupId='com.google.android.gcm.server'
+      MAVEN_USE_VERSIONS_PLUGIN: true
     on_failure:
       put: send-email
       params:
