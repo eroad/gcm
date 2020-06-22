@@ -24,7 +24,7 @@ resources:
       password: ((smtp-password))
     from: concourse@eroad.com
     to:
-    - bala.pavothil@eroad.com
+    - developers@eroad.co.nz
 
 - name: google-gcm-rest-client-git
   type: git
