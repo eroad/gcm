@@ -80,10 +80,4 @@
             </snapshots>
         </pluginRepository>
     </pluginRepositories>
-    <distributionManagement>
-        <repository>
-            <id>nexus</id>
-            <url>https://nexus.eroad.io/content/repositories/component-ci</url>
-        </repository>
-    </distributionManagement>
 </project>
