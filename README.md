@@ -17,6 +17,12 @@ For help getting started with GCM, see the
 [GCM Quickstart for Android](https://developers.google.com/cloud-messaging/android/start)
 or the [GCM Quickstart for iOS](https://developers.google.com/cloud-messaging/ios/start).
 
+
+## CI Build Information
+| Release |
+|----------|
+[![Build Status](https://concoursebadge.eroad.io/concourse-badge?pipeline=google-gcm-rest-client&job=build-deploy)](https://concourse.eroad.io/teams/main/pipelines/google-gcm-rest-client)
+
 ## Support
 
 - Google+ Community: https://plus.sandbox.google.com/communities/105153134372062985968
