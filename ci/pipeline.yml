@@ -1,186 +1,188 @@
----
-resource_types:
-
-- name: pull-request
-  type: docker-image
-  source:
-    repository: teliaoss/github-pr-resource
-
-- name: email
-  type: docker-image
-  source:
-    repository: pcfseceng/email-resource
-
-resources:
-
-- name: send-email
-  type: email
-  icon: email
-  source:
-    smtp:
-      host: email-smtp.us-west-2.amazonaws.com
-      port: "587" # this must be a string
-      username: ((smtp-username))
-      password: ((smtp-password))
-    from: concourse@eroad.com
-    to:
-    - developers@eroad.co.nz
-
-- name: google-gcm-rest-client-git
-  type: git
-  icon: github
-  check_every: 10s
-  source:
-    uri: https://github.com/eroad/gcm.git
-    branch: master
-    username: {{github-username}}
-    password: {{github-password}}
-    ignore_paths: ['ci/*', 'README.md']
-
-- name: google-gcm-rest-client-pullrequest
-  type: pull-request
-  check_every: 10s
-  source:
-    repository: eroad/gcm
-    access_token: {{github-token}}
-    base_branch: master
-    ignore_paths: ['ci/*', 'README.md']
-
-- name: pipeline-task
-  type: git
-  source:
-    uri: https://github.com/eroad/pipeline-task.git
-    branch: master
-    username: {{github-username}}
-    password: {{github-password}}
-
-- name: release-version
-  type: semver
-  source:
-    initial_version: 1.2.0
-    key: application-ci/google-gcm-rest-client/version/version
-    bucket: eroad-artifact-ap-southeast-2
-    access_key_id: {{aws-access-key}}
-    secret_access_key: {{aws-secret-key}}
-    region_name: ap-southeast-2
-
-- name: github-release
-  type: github-release
-  icon: github
-  source:
-    access_token: {{github-token}}
-    user: eroad
-    repository: gcm
-
 groups:
-- name: build-release
-  jobs:
+- jobs:
   - bump-major
   - bump-minor
   - verify
   - build-deploy
-
+  name: build-release
 jobs:
-
-- name: bump-minor
-  serial_groups: [release-version]
-  build_log_retention: {builds: 1}
+- build_log_retention:
+    builds: 1
+  name: bump-minor
   plan:
   - get: release-version
-    params: {bump: minor}
-  - put: release-version
     params:
+      bump: minor
+  - params:
       file: release-version/version
-
-- name: bump-major
-  serial_groups: [release-version]
-  build_log_retention: {builds: 1}
+    put: release-version
+  serial_groups:
+  - release-version
+- build_log_retention:
+    builds: 1
+  name: bump-major
   plan:
   - get: release-version
-    params: {bump: major}
-  - put: release-version
     params:
+      bump: major
+  - params:
       file: release-version/version
-
-- name: verify
-  build_log_retention: {builds: 10}
+    put: release-version
+  serial_groups:
+  - release-version
+- build_log_retention:
+    builds: 10
+  name: verify
   plan:
   - in_parallel:
     - get: google-gcm-rest-client-pullrequest
       trigger: true
       version: every
     - get: release-version
-      params: {bump: patch}
+      params:
+        bump: patch
     - get: pipeline-task
-  - put: google-gcm-rest-client-pullrequest
-    params:
+  - params:
       path: google-gcm-rest-client-pullrequest
       status: pending
-  - task: maven-build
-    privileged: true
-    file: pipeline-task/maven-v2/tasks/maven-dind-build.yml
-    input_mapping: 
+    put: google-gcm-rest-client-pullrequest
+  - file: pipeline-task/maven-v2/tasks/maven-dind-build.yml
+    input_mapping:
       repo: google-gcm-rest-client-pullrequest
       version: release-version
-    params:
-      NEXUS_USER: {{nexus-user}}
-      NEXUS_PASSWORD: {{nexus-password}}
-      MAVEN_PHASES: verify
-      MAVEN_OPTIONS: -DgroupId='com.google.android.gcm.server'
-      MAVEN_USE_VERSIONS_PLUGIN: true
     on_failure:
-      put: google-gcm-rest-client-pullrequest
       params:
         path: google-gcm-rest-client-pullrequest
         status: failure
-    on_success:
       put: google-gcm-rest-client-pullrequest
+    on_success:
       params:
         path: google-gcm-rest-client-pullrequest
         status: success
-
-- name: build-deploy
-  serial: true
-  build_log_retention: {builds: 5}
+      put: google-gcm-rest-client-pullrequest
+    params:
+      MAVEN_OPTIONS: -DgroupId='com.google.android.gcm.server'
+      MAVEN_PHASES: verify
+      MAVEN_USE_VERSIONS_PLUGIN: true
+      NEXUS_PASSWORD: ((nexus-password}}
+      NEXUS_USER: ((nexus-user}}
+    privileged: true
+    task: maven-build
+- build_log_retention:
+    builds: 5
+  name: build-deploy
   plan:
   - in_parallel:
     - get: google-gcm-rest-client-git
       trigger: true
     - get: pipeline-task
     - get: release-version
-      params: {bump: patch}
-  - task: maven-build
-    privileged: true
-    file: pipeline-task/maven-v2/tasks/maven-dind-build.yml
-    input_mapping: 
+      params:
+        bump: patch
+  - file: pipeline-task/maven-v2/tasks/maven-dind-build.yml
+    input_mapping:
       repo: google-gcm-rest-client-git
       version: release-version
+    on_failure:
+      params:
+        body_text: ${ATC_EXTERNAL_URL}/teams/main/pipelines/${BUILD_PIPELINE_NAME}/jobs/${BUILD_JOB_NAME}/builds/${BUILD_NAME}
+        subject_text: 'BUILD FAILED: ${BUILD_PIPELINE_NAME} - ${BUILD_JOB_NAME}/${BUILD_NAME}'
+      put: send-email
+    on_success:
+      params:
+        body_text: ${ATC_EXTERNAL_URL}/teams/main/pipelines/${BUILD_PIPELINE_NAME}/jobs/${BUILD_JOB_NAME}/builds/${BUILD_NAME}
+        subject_text: 'BUILD SUCCESS: ${BUILD_PIPELINE_NAME} - ${BUILD_JOB_NAME}/${BUILD_NAME}'
+      put: send-email
     params:
-      NEXUS_USER: {{nexus-user}}
-      NEXUS_PASSWORD: {{nexus-password}}
       MAVEN_GOALS: deploy
       MAVEN_OPTIONS: -DgroupId='com.google.android.gcm.server'
       MAVEN_USE_VERSIONS_PLUGIN: true
-    on_failure:
-      put: send-email
-      params:
-        subject_text: "BUILD FAILED: ${BUILD_PIPELINE_NAME} - ${BUILD_JOB_NAME}/${BUILD_NAME}"
-        body_text: "${ATC_EXTERNAL_URL}/teams/main/pipelines/${BUILD_PIPELINE_NAME}/jobs/${BUILD_JOB_NAME}/builds/${BUILD_NAME}"
-    on_success:
-      put: send-email
-      params:
-        subject_text: "BUILD SUCCESS: ${BUILD_PIPELINE_NAME} - ${BUILD_JOB_NAME}/${BUILD_NAME}"
-        body_text: "${ATC_EXTERNAL_URL}/teams/main/pipelines/${BUILD_PIPELINE_NAME}/jobs/${BUILD_JOB_NAME}/builds/${BUILD_NAME}"
+      NEXUS_PASSWORD: ((nexus-password}}
+      NEXUS_USER: ((nexus-user}}
+    privileged: true
+    task: maven-build
   - in_parallel:
-    - put: release-version
-      params:
+    - params:
         file: release-version/version
-    - put: google-gcm-rest-client-git
-      params:
-       repository: google-gcm-rest-client-git
-       only_tag: true
-       tag: release-version/version
-  - put: github-release
-    params:
+      put: release-version
+    - params:
+        only_tag: true
+        repository: google-gcm-rest-client-git
+        tag: release-version/version
+      put: google-gcm-rest-client-git
+  - params:
       name: release-version/version
       tag: release-version/version
+    put: github-release
+  serial: true
+resource_types:
+- name: pull-request
+  source:
+    aws_access_key_id: ((aws-access-key))
+    aws_secret_access_key: ((aws-secret-key))
+    repository: 212136148154.dkr.ecr.ap-southeast-2.amazonaws.com/mirrored/docker.io/teliaoss/github-pr-resource
+  type: docker-image
+- name: email
+  source:
+    aws_access_key_id: ((aws-access-key))
+    aws_secret_access_key: ((aws-secret-key))
+    repository: 212136148154.dkr.ecr.ap-southeast-2.amazonaws.com/mirrored/docker.io/pcfseceng/email-resource
+  type: docker-image
+resources:
+- icon: email
+  name: send-email
+  source:
+    from: concourse@eroad.com
+    smtp:
+      host: email-smtp.us-west-2.amazonaws.com
+      password: ((smtp-password))
+      port: '587'
+      username: ((smtp-username))
+    to:
+    - developers@eroad.co.nz
+  type: email
+- check_every: 10s
+  icon: github
+  name: google-gcm-rest-client-git
+  source:
+    branch: master
+    ignore_paths:
+    - ci/*
+    - README.md
+    password: ((github-password}}
+    uri: https://github.com/eroad/gcm.git
+    username: ((github-username}}
+  type: git
+- check_every: 10s
+  name: google-gcm-rest-client-pullrequest
+  source:
+    access_token: ((github-token}}
+    base_branch: master
+    ignore_paths:
+    - ci/*
+    - README.md
+    repository: eroad/gcm
+  type: pull-request
+- name: pipeline-task
+  source:
+    branch: master
+    password: ((github-password}}
+    uri: https://github.com/eroad/pipeline-task.git
+    username: ((github-username}}
+  type: git
+- name: release-version
+  source:
+    access_key_id: ((aws-access-key}}
+    bucket: eroad-artifact-ap-southeast-2
+    initial_version: 1.2.0
+    key: application-ci/google-gcm-rest-client/version/version
+    region_name: ap-southeast-2
+    secret_access_key: ((aws-secret-key}}
+  type: semver
+- icon: github
+  name: github-release
+  source:
+    access_token: ((github-token}}
+    repository: gcm
+    user: eroad
+  type: github-release
