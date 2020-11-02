@@ -36,8 +36,8 @@ resources:
   source:
     uri: https://github.com/eroad/gcm.git
     branch: master
-    username: ((github-username}}
-    password: ((github-password}}
+    username: ((github-username))
+    password: ((github-password))
     ignore_paths: [ci/*, README.md]
 
 - name: google-gcm-rest-client-pullrequest
@@ -45,7 +45,7 @@ resources:
   check_every: 10s
   source:
     repository: eroad/gcm
-    access_token: ((github-token}}
+    access_token: ((github-token))
     base_branch: master
     ignore_paths: [ci/*, README.md]
 
@@ -54,8 +54,8 @@ resources:
   source:
     uri: https://github.com/eroad/pipeline-task.git
     branch: master
-    username: ((github-username}}
-    password: ((github-password}}
+    username: ((github-username))
+    password: ((github-password))
 
 - name: release-version
   type: semver
@@ -63,15 +63,15 @@ resources:
     initial_version: 1.2.0
     key: application-ci/google-gcm-rest-client/version/version
     bucket: eroad-artifact-ap-southeast-2
-    access_key_id: ((aws-access-key}}
-    secret_access_key: ((aws-secret-key}}
+    access_key_id: ((aws-access-key))
+    secret_access_key: ((aws-secret-key))
     region_name: ap-southeast-2
 
 - name: github-release
   type: github-release
   icon: github
   source:
-    access_token: ((github-token}}
+    access_token: ((github-token))
     user: eroad
     repository: gcm
 
@@ -126,8 +126,8 @@ jobs:
       repo: google-gcm-rest-client-pullrequest
       version: release-version
     params:
-      NEXUS_USER: ((nexus-user}}
-      NEXUS_PASSWORD: ((nexus-password}}
+      NEXUS_USER: ((nexus-user))
+      NEXUS_PASSWORD: ((nexus-password))
       MAVEN_PHASES: verify
       MAVEN_OPTIONS: -DgroupId='com.google.android.gcm.server'
       MAVEN_USE_VERSIONS_PLUGIN: true
@@ -159,8 +159,8 @@ jobs:
       repo: google-gcm-rest-client-git
       version: release-version
     params:
-      NEXUS_USER: ((nexus-user}}
-      NEXUS_PASSWORD: ((nexus-password}}
+      NEXUS_USER: ((nexus-user))
+      NEXUS_PASSWORD: ((nexus-password))
       MAVEN_GOALS: deploy
       MAVEN_OPTIONS: -DgroupId='com.google.android.gcm.server'
       MAVEN_USE_VERSIONS_PLUGIN: true
